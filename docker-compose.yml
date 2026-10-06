@@ -1,0 +1,34 @@
+# Self-hosting alternative to Vercel: `docker compose up -d --build`, then http://<machine IP>:3000.
+# Not built or tested since the move to Postgres. Set LAB_ACCESS_CODE and POSTGRES_PASSWORD in .env.
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      LAB_ACCESS_CODE: ${LAB_ACCESS_CODE:?set LAB_ACCESS_CODE in .env}
+      DATABASE_URL: postgres://lab:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/lab
+    volumes:
+      - lab-uploads:/app/uploads
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: lab
+    volumes:
+      - lab-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lab"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  lab-db:
+  lab-uploads:

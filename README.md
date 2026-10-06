@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Caixinha do Lab (lab_bills)
 
-## Getting Started
+Shared snack/coffee purchases for the research lab. Whoever buys posts the purchase with its
+receipt; everyone else sees it, gets a suggested share (total ÷ active members) and chips in
+whatever they want, attaching proof of payment. Mobile first.
 
-First, run the development server:
+Next.js 16 (App Router, Server Actions) · Prisma 7 + Postgres · Tailwind 4. Hosted on Vercel with
+Neon (database) and a private Vercel Blob store (receipts). Design decisions in
+[docs/SPEC.md](docs/SPEC.md).
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env        # set LAB_ACCESS_CODE
+npm install                 # also runs `prisma generate`
+npm run db:start            # local Postgres (Prisma's dev server — no Docker); prints its URL
+npm run db:migrate          # apply migrations
+npm run db:mock -- --yes    # optional: wipe and create two test members (Ana/Bruno Teste, senha123)
+npm run dev                 # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+If `db:start` prints a URL different from the one in `.env.example`, put it in `.env`.
+From a phone on the same network: `npm run dev -- -H 0.0.0.0`, then `http://<your IP>:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command | |
+|---|---|
+| `npm test` | Unit tests (money parsing, split rules) |
+| `npm run typecheck` · `npm run lint` | |
+| `npm run test:e2e` | No-JS end-to-end run against a **running** server (`E2E_BASE`, `LAB_ACCESS_CODE`). Creates members and purchases — local database only |
+| `npm run db:migrate` | After editing `prisma/schema.prisma`; commit the new folder in `prisma/migrations` |
+| `npm run db:stop` | Stop the local Postgres |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Receipts are stored in `./uploads` locally and never under `public/`.
 
-## Learn More
+## Deploying (Vercel)
 
-To learn more about Next.js, take a look at the following resources:
+GitHub Pages cannot host this app: it serves static files only, and the app needs a server for
+login, the database and receipt uploads. Vercel deploys from the same GitHub repository.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+One-time setup:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Push this repository to GitHub.
+2. On vercel.com: **Add New → Project**, import the repository. Framework is detected as Next.js.
+3. In the project's **Storage** tab:
+   - **Create → Neon** (Postgres). Connecting it sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+   - **Create → Blob**, access **Private**. Connecting it sets `BLOB_STORE_ID`.
+4. In **Settings → Environment Variables**, add `LAB_ACCESS_CODE`.
+5. Redeploy. The build runs `vercel-build`, which applies pending migrations and then builds.
 
-## Deploy on Vercel
+After that every push to `main` deploys. The app is at `https://<project>.vercel.app`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Limits worth knowing: Vercel refuses request bodies over 4.5 MB, so receipts are capped at 4 MB.
+Photos are shrunk in the browser before upload (`src/lib/shrink-image.ts`), which keeps them
+far below that; a large PDF is the only thing likely to hit the cap.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Self-hosting (Docker)
+
+`Dockerfile` and `docker-compose.yml` run the app with its own Postgres container and receipts on
+a volume. They have **not been built or tested** since the move from SQLite to Postgres.

@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Member {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  passwordHash  String
+  /// Shown to whoever contributes to this member's purchases. Free text: CPF, e-mail, phone
+  /// or random key — Pix itself validates it when someone pays.
+  pixKey        String?
+  /// Only active members count in the split of new purchases.
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  sessions      Session[]
+  purchases     Purchase[]
+  contributions Contribution[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  /// SHA-256 of the cookie token; the token itself is never stored.
+  tokenHash String   @unique
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+}
+
+model Purchase {
+  id            String         @id @default(cuid())
+  buyerId       String
+  buyer         Member         @relation(fields: [buyerId], references: [id])
+  description   String
+  amountCents   Int
+  purchasedAt   DateTime
+  /// File name inside UPLOADS_DIR.
+  receiptFile   String
+  /// Active members when the purchase was posted, buyer included. Snapshotted so later
+  /// sign-ups do not change what was already asked of everyone else.
+  splitCount    Int
+  createdAt     DateTime       @default(now())
+  contributions Contribution[]
+
+  @@index([createdAt])
+}
+
+model Contribution {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id])
+  amountCents Int
+  receiptFile String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([memberId])
+}
